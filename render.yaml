@@ -1,0 +1,12 @@
+services:
+  - type: cron
+    name: vacancy-radar-job
+    schedule: "@hourly"
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python main.py"  # <-- Change this if your file has a different name
+    envVars:
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: CHAT_ID
+        sync: false
