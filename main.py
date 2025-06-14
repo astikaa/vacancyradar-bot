@@ -22,7 +22,7 @@ def log(message):
 
 # --- Escape Markdown special characters ---
 def escape_md(text):
-    return re.sub(r'([*_`\[\]()])', r'\\\1', text)
+    return re.sub(r'([*_`\[\]])', r'\\\1', text)
 
 # --- Load previously saved jobs ---
 def load_saved_jobs():
