@@ -13,7 +13,7 @@ load_dotenv()
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
 SAVED_JOBS_FILE = 'saved_jobs.json'
-MAX_JOBS_TO_SEND = 5
+MAX_JOBS_TO_SEND = 9
 
 # --- Helper log function ---
 def log(message):
@@ -61,7 +61,7 @@ def clear_old_jobs():
 def scrape_jobs():
     jobs = []
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
     }
 
     def extract_posted(detail_soup):
@@ -70,10 +70,10 @@ def scrape_jobs():
             date_match = re.search(r'(\d{1,2}\s+\w+\s+\d{4})', posted_tag)
             if date_match:
                 try:
-                    return datetime.strptime(date_match.group(1), "%d %B %Y").strftime("%Y-%m-%d")
+                    return datetime.strptime(date_match.group(1), "%d %B %Y").strftime("%d %b %Y")
                 except:
                     pass
-        return datetime.now().strftime("%Y-%m-%d")
+        return datetime.now().strftime("%d %b %Y")
 
     def get_detail_posted(url):
         try:
@@ -81,50 +81,85 @@ def scrape_jobs():
             soup = BeautifulSoup(res.text, 'html.parser')
             return extract_posted(soup)
         except:
-            return datetime.now().strftime("%Y-%m-%d")
+            return datetime.now().strftime("%d %b %Y")
+
+    def extract_city(text):
+        match = re.search(r'\b(?:di|in|at)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b', text)
+        return match.group(1) if match else "Unknown"
 
     sources = [
-        ("Urbanhire", "https://www.urbanhire.com/jobs", ".job-title a", lambda c: (c.text.strip(), c['href'], c.find_parent('div', class_='job-list-item').select_one(".company-name"))),
+        ("Urbanhire", "https://www.urbanhire.com/jobs", ".job-title a", lambda c: (
+            c.text.strip(),
+            c['href'],
+            c.find_parent('div', class_='job-list-item').select_one(".company-name").text.strip() if c.find_parent('div', class_='job-list-item').select_one(".company-name") else "Unknown",
+            extract_city(c.text)
+        )),
         ("Kalibrr", "https://www.kalibrr.com/job-board/te", "a.kalibrr-job-list-card", lambda c: (
             c.select_one("h3").text.strip() if c.select_one("h3") else "No title",
             "https://www.kalibrr.com" + c['href'],
-            c.select_one("h4").text.strip() if c.select_one("h4") else "Unknown")
-        ),
-        ("Glints", "https://glints.com/id/opportunities/jobs/explore?country=ID", "a[href*='/id/opportunities/jobs']", lambda c: (
+            c.select_one("h4").text.strip() if c.select_one("h4") else "Unknown",
+            extract_city(c.text)
+        )),
+        ("Glints", "https://glints.com/id/opportunities/jobs/explore", "a[href*='/id/opportunities/jobs']", lambda c: (
             c.get("aria-label", "No title"),
             "https://glints.com" + c['href'],
-            "Glints")
-        ),
+            "Glints",
+            extract_city(c.get("aria-label", ""))
+        )),
+        ("Jobstreet Express", "https://id.jobstreetexpress.com/lowongan-Full-time", "a[data-automation='job-card-title']", lambda c: (
+            c.text.strip(),
+            "https://id.jobstreetexpress.com" + c['href'],
+            "Jobstreet Express",
+            extract_city(c.text)
+        )),
+        ("Jobstreet Express", "https://id.jobstreetexpress.com/lowongan-Daily-worker", "a[data-automation='job-card-title']", lambda c: (
+            c.text.strip(),
+            "https://id.jobstreetexpress.com" + c['href'],
+            "Jobstreet Express",
+            extract_city(c.text)
+        )),
+        ("Jobstreet Express", "https://id.jobstreetexpress.com/lowongan-Part-time?sp=trending_job_type", "a[data-automation='job-card-title']", lambda c: (
+            c.text.strip(),
+            "https://id.jobstreetexpress.com" + c['href'],
+            "Jobstreet Express",
+            extract_city(c.text)
+        )),
         ("Jobstreet", "https://id.jobstreet.com/id/jobs", "article", lambda c: (
             c.select_one("h1,h2,h3").text.strip() if c.select_one("h1,h2,h3") else "No title",
             "https://www.jobstreet.co.id" + c.find('a')['href'],
-            c.select_one(".FYwKg._1nRJo").text.strip() if c.select_one(".FYwKg._1nRJo") else "Jobstreet")
-        ),
+            c.select_one(".FYwKg._1nRJo").text.strip() if c.select_one(".FYwKg._1nRJo") else "Jobstreet",
+            extract_city(c.text)
+        )),
         ("Karir", "https://karir.com/search-lowongan", "a[data-testid='job-card-title']", lambda c: (
             c.text.strip(),
             c['href'],
-            "Karir")
-        ),
+            "Karir",
+            extract_city(c.text)
+        )),
         ("Loker.id", "https://www.loker.id/cari-lowongan-kerja", "h3.entry-title a", lambda c: (
             c.text.strip(),
             c['href'],
-            "Loker.id")
-        ),
-        ("LinkedIn", "https://www.linkedin.com/jobs/search?keywords=Admin&location=Indonesia", "a.result-card__full-card-link", lambda c: (
+            "Loker.id",
+            extract_city(c.text)
+        )),
+        ("LinkedIn", "https://www.linkedin.com/jobs/search/?keywords=admin", "a.result-card__full-card-link", lambda c: (
             c.text.strip(),
             c['href'],
-            "LinkedIn")
-        ),
+            "LinkedIn",
+            extract_city(c.text)
+        )),
         ("Glassdoor", "https://www.glassdoor.com/Job/index.htm", "a.jobLink", lambda c: (
             c.text.strip(),
             "https://www.glassdoor.com" + c['href'],
-            "Glassdoor")
-        ),
+            "Glassdoor",
+            extract_city(c.text)
+        )),
         ("Indeed", "https://www.indeed.com/q-remote-jobs.html", "a[data-hiring-event]", lambda c: (
             c.text.strip(),
             "https://www.indeed.com" + c['href'],
-            "Indeed")
-        )
+            "Indeed",
+            extract_city(c.text)
+        ))
     ]
 
     for name, url, selector, parser in sources:
@@ -133,11 +168,11 @@ def scrape_jobs():
             res = requests.get(url, headers=headers)
             soup = BeautifulSoup(res.text, 'html.parser')
             for card in soup.select(selector):
-                title, link, company = parser(card)
+                title, link, company, city = parser(card)
                 if not link.startswith('http'):
                     link = url + link
                 posted = get_detail_posted(link)
-                jobs.append({'title': title, 'link': link, 'company': company, 'posted': posted})
+                jobs.append({'title': title, 'link': link, 'company': company, 'city': city, 'posted': posted, 'source': name})
             log(f"Found {len(jobs)} total jobs after {name} scrape.")
         except Exception as e:
             log(f"Error scraping {name}: {e}")
@@ -154,7 +189,7 @@ def notify_new_jobs(new_jobs):
         message = (
             f"\U0001F4E1 [VacancyRadar]\n"
             f"\U0001F4BC Posisi: *{escape_md(job['title'])}*\n"
-            f"\U0001F3E2 Perusahaan: _{escape_md(job['company'])}_\n"
+            f"\U0001F3E2 Sumber: `{escape_md(job['source'])}`\n"
             f"\u23F0 Posted: `{job['posted']}`\n"
             f"\U0001F517 [Click for details]({job['link']})"
         )
