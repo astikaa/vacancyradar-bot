@@ -90,17 +90,17 @@ def scrape_jobs():
             "https://www.kalibrr.com" + c['href'],
             c.select_one("h4").text.strip() if c.select_one("h4") else "Unknown")
         ),
-        ("Glints", "https://glints.com/id/opportunities/jobs/explore", "a[href*='/id/opportunities/jobs']", lambda c: (
+        ("Glints", "https://glints.com/id/opportunities/jobs/explore?country=ID", "a[href*='/id/opportunities/jobs']", lambda c: (
             c.get("aria-label", "No title"),
             "https://glints.com" + c['href'],
             "Glints")
         ),
-        ("Jobstreet", "https://www.jobstreet.co.id/id/job-search/lowongan-kerja", "article", lambda c: (
+        ("Jobstreet", "https://id.jobstreet.com/id/jobs", "article", lambda c: (
             c.select_one("h1,h2,h3").text.strip() if c.select_one("h1,h2,h3") else "No title",
             "https://www.jobstreet.co.id" + c.find('a')['href'],
             c.select_one(".FYwKg._1nRJo").text.strip() if c.select_one(".FYwKg._1nRJo") else "Jobstreet")
         ),
-        ("Karir", "https://karir.com/search", "a[data-testid='job-card-title']", lambda c: (
+        ("Karir", "https://karir.com/search-lowongan", "a[data-testid='job-card-title']", lambda c: (
             c.text.strip(),
             c['href'],
             "Karir")
@@ -110,7 +110,7 @@ def scrape_jobs():
             c['href'],
             "Loker.id")
         ),
-        ("LinkedIn", "https://www.linkedin.com/jobs/search/?keywords=developer", "a.result-card__full-card-link", lambda c: (
+        ("LinkedIn", "https://www.linkedin.com/jobs/search?keywords=Admin&location=Indonesia", "a.result-card__full-card-link", lambda c: (
             c.text.strip(),
             c['href'],
             "LinkedIn")
