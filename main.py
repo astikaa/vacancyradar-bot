@@ -64,37 +64,83 @@ def scrape_jobs():
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
     }
 
-    # Existing sources...
-    # (Glints, Jobstreet, Karir, Loker.id, LinkedIn, Glassdoor, Indeed)
+    def extract_posted(detail_soup):
+        posted_tag = detail_soup.find(string=re.compile(r"Posted.*|Diposting.*|diunggah.*", re.IGNORECASE))
+        if posted_tag:
+            date_match = re.search(r'(\d{1,2}\s+\w+\s+\d{4})', posted_tag)
+            if date_match:
+                try:
+                    return datetime.strptime(date_match.group(1), "%d %B %Y").strftime("%Y-%m-%d")
+                except:
+                    pass
+        return datetime.now().strftime("%Y-%m-%d")
 
-    # --- Urbanhire ---
-    try:
-        log("Scraping Urbanhire...")
-        res = requests.get("https://www.urbanhire.com/jobs", headers=headers)
-        soup = BeautifulSoup(res.text, 'html.parser')
-        for card in soup.select(".job-title a"):
-            title = card.text.strip()
-            link = card['href'] if card['href'].startswith('http') else "https://www.urbanhire.com" + card['href']
-            company_tag = card.find_parent('div', class_='job-list-item').select_one(".company-name")
-            company = company_tag.text.strip() if company_tag else "Unknown"
-            jobs.append({'title': title, 'link': link, 'company': company})
-        log(f"Found {len(jobs)} total jobs after Urbanhire scrape.")
-    except Exception as e:
-        log(f"Error scraping Urbanhire: {e}")
+    def get_detail_posted(url):
+        try:
+            res = requests.get(url, headers=headers)
+            soup = BeautifulSoup(res.text, 'html.parser')
+            return extract_posted(soup)
+        except:
+            return datetime.now().strftime("%Y-%m-%d")
 
-    # --- Kalibrr ---
-    try:
-        log("Scraping Kalibrr...")
-        res = requests.get("https://www.kalibrr.com/job-board/te", headers=headers)
-        soup = BeautifulSoup(res.text, 'html.parser')
-        for card in soup.select("a.kalibrr-job-list-card"):
-            title = card.select_one("h3").text.strip() if card.select_one("h3") else "No title"
-            link = "https://www.kalibrr.com" + card['href']
-            company = card.select_one("h4").text.strip() if card.select_one("h4") else "Unknown"
-            jobs.append({'title': title, 'link': link, 'company': company})
-        log(f"Found {len(jobs)} total jobs after Kalibrr scrape.")
-    except Exception as e:
-        log(f"Error scraping Kalibrr: {e}")
+    sources = [
+        ("Urbanhire", "https://www.urbanhire.com/jobs", ".job-title a", lambda c: (c.text.strip(), c['href'], c.find_parent('div', class_='job-list-item').select_one(".company-name"))),
+        ("Kalibrr", "https://www.kalibrr.com/job-board/te", "a.kalibrr-job-list-card", lambda c: (
+            c.select_one("h3").text.strip() if c.select_one("h3") else "No title",
+            "https://www.kalibrr.com" + c['href'],
+            c.select_one("h4").text.strip() if c.select_one("h4") else "Unknown")
+        ),
+        ("Glints", "https://glints.com/id/opportunities/jobs/explore", "a[href*='/id/opportunities/jobs']", lambda c: (
+            c.get("aria-label", "No title"),
+            "https://glints.com" + c['href'],
+            "Glints")
+        ),
+        ("Jobstreet", "https://www.jobstreet.co.id/id/job-search/lowongan-kerja", "article", lambda c: (
+            c.select_one("h1,h2,h3").text.strip() if c.select_one("h1,h2,h3") else "No title",
+            "https://www.jobstreet.co.id" + c.find('a')['href'],
+            c.select_one(".FYwKg._1nRJo").text.strip() if c.select_one(".FYwKg._1nRJo") else "Jobstreet")
+        ),
+        ("Karir", "https://karir.com/search", "a[data-testid='job-card-title']", lambda c: (
+            c.text.strip(),
+            c['href'],
+            "Karir")
+        ),
+        ("Loker.id", "https://www.loker.id/cari-lowongan-kerja", "h3.entry-title a", lambda c: (
+            c.text.strip(),
+            c['href'],
+            "Loker.id")
+        ),
+        ("LinkedIn", "https://www.linkedin.com/jobs/search/?keywords=developer", "a.result-card__full-card-link", lambda c: (
+            c.text.strip(),
+            c['href'],
+            "LinkedIn")
+        ),
+        ("Glassdoor", "https://www.glassdoor.com/Job/index.htm", "a.jobLink", lambda c: (
+            c.text.strip(),
+            "https://www.glassdoor.com" + c['href'],
+            "Glassdoor")
+        ),
+        ("Indeed", "https://www.indeed.com/q-remote-jobs.html", "a[data-hiring-event]", lambda c: (
+            c.text.strip(),
+            "https://www.indeed.com" + c['href'],
+            "Indeed")
+        )
+    ]
+
+    for name, url, selector, parser in sources:
+        try:
+            log(f"Scraping {name}...")
+            res = requests.get(url, headers=headers)
+            soup = BeautifulSoup(res.text, 'html.parser')
+            for card in soup.select(selector):
+                title, link, company = parser(card)
+                if not link.startswith('http'):
+                    link = url + link
+                posted = get_detail_posted(link)
+                jobs.append({'title': title, 'link': link, 'company': company, 'posted': posted})
+            log(f"Found {len(jobs)} total jobs after {name} scrape.")
+        except Exception as e:
+            log(f"Error scraping {name}: {e}")
 
     return jobs
 
@@ -109,6 +155,7 @@ def notify_new_jobs(new_jobs):
             f"\U0001F4E1 [VacancyRadar]\n"
             f"\U0001F4BC Posisi: *{escape_md(job['title'])}*\n"
             f"\U0001F3E2 Perusahaan: _{escape_md(job['company'])}_\n"
+            f"\u23F0 Posted: `{job['posted']}`\n"
             f"\U0001F517 [Click for details]({job['link']})"
         )
         try:
